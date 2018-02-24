@@ -100,7 +100,11 @@ ENV/
 # mypy
 .mypy_cache/
 
+*.ui
 *.txt
 *.pyc
 *.pyw
 server/users/NirDafnai/heythat'sprettygood
+*.png
+ui files/
+file sending/
