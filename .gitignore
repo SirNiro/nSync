@@ -110,3 +110,5 @@ ui files/
 file sending/
 try.py
 server/users/NirDafnai/heythat'sprettybad
+*.xml
+*.iml

@@ -5,7 +5,8 @@ import pickle
 import threading
 import shutil
 from PySide import QtGui, QtCore
-
+import uuid, smtplib
+uuid_dict = {}
 class Window(QtGui.QWidget):
 
     def __init__(this):
@@ -103,6 +104,63 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall("login_successful")
                     else:
                         client_socket.sendall("login_unsuccessful")
+                elif data[0] == "forgot_password1":
+                    for x in users:
+                        if x.username == data[1]:
+                            client_socket.sendall("ok")
+                            random = str(uuid.uuid4())[:6].upper()
+                            uuid_dict[x.username] = random
+                            server = smtplib.SMTP('smtp.gmail.com', 587)
+                            server.ehlo()
+                            server.starttls()
+                            server.login("nsyncmail1@gmail.com", "cP6uY8a9")
+                            msg = "\n".join([
+                                "From: nsyncmail1@gmail.com",
+                                "To: " + x.email,
+                                "Subject: Password Reset",
+                                "",
+                                "Your reset code is: " + random
+                            ])
+                            server.sendmail("nsyncmail1@gmail.com", x.email, msg)
+                            server.quit()
+                            break
+                    else:
+                        client_socket.sendall("not ok")
+                elif data[0] == "forgot_password2":
+                    try:
+                        if uuid_dict[data[1]] == data[2]:
+                            client_socket.sendall("valid")
+                        else:
+                            client_socket.sendall("invalid")
+                    except:
+                        client_socket.sendall("invalid")
+                elif data[0] == "forgot_password3":
+                    if len(data[2]) > 5:
+                        for x in users:
+                            if x.username == data[1]:
+                                x.password = data[2]
+                                f = open("database.txt", "r")
+                                lines = f.readlines()
+                                f.close()
+                                count = 0
+                                for line in lines:
+                                    l1, l2, l3 = line.split()
+                                    if l1 == data[1]:
+                                        lines[count] = x.username + " " + x.email + " " + x.password
+                                        try:
+                                            lines[count+1] = "\n" + lines[count+1]
+                                        except:
+                                            pass
+                                        break
+                                    count+=1
+                                f = open("database.txt", "w")
+                                for line in lines:
+                                    f.write(line)
+                                f.close()
+                                client_socket.sendall("changed")
+                                break
+                    else:
+                        client_socket.sendall("invalid")
                 elif data[0] == "register":
                     validity = register(data)
                     if validity[0] == "":
@@ -210,7 +268,7 @@ def acceptClients():
         (client_socket, client_address) = server_socket.accept()
         clients.append((client_socket, client_address))
         print str(client_address[0]) + ":" + str(client_address[1]) + " has connected."
-        t = threading.Thread(target=clientthread, args=(client_socket, client_address))
+        t = threading.Thread(target=clientthread, args=(client_socket, client_address,))
         t.daemon = True
         t.start()
 users = []

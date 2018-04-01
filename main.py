@@ -1,7 +1,8 @@
 import sys, socket, os
 import pickle
 from PySide import QtCore, QtGui
-ip = '10.0.0.5'
+import uuid
+ip = '127.0.0.1'
 port = 8820
 class File(object):
     def __init__(this, fileName):
@@ -26,7 +27,6 @@ def main():
     login_ins.center()
     login_ins.show()
     sys.exit(app.exec_())
-
 class login_form(QtGui.QWidget):
     def __init__(this):
         super(login_form, this).__init__()
@@ -40,11 +40,11 @@ class login_form(QtGui.QWidget):
         this.title_label.setGeometry(QtCore.QRect(120, 5, 60, 50))
 
         this.login_button = QtGui.QPushButton(this)
-        this.login_button.setGeometry(QtCore.QRect(50, 130, 100, 50))
+        this.login_button.setGeometry(QtCore.QRect(50, 135, 100, 50))
         this.login_button.clicked.connect(this.loginPressed)
 
         this.register_button = QtGui.QPushButton(this)
-        this.register_button.setGeometry(QtCore.QRect(150, 130, 100, 50))
+        this.register_button.setGeometry(QtCore.QRect(150, 135, 100, 50))
         this.register_button.clicked.connect(this.registerPressed)
 
         this.lineEdit = QtGui.QLineEdit(this)
@@ -60,10 +60,11 @@ class login_form(QtGui.QWidget):
         this.password_label = QtGui.QLabel(this)
         this.password_label.setGeometry(QtCore.QRect(50, 90, 71, 21))
 
-        this.error_label = QtGui.QLabel(this)
-        this.error_label.setGeometry(QtCore.QRect(200, 200, 100, 16))
-        this.error_label.setStyleSheet("color: black")
-
+        this.forgot_button = QtGui.QPushButton(this)
+        this.forgot_button.setGeometry(QtCore.QRect(115, 112, 100, 20))
+        this.forgot_button.setFlat(True)
+        this.forgot_button.setStyleSheet("text-decoration: underline")
+        this.forgot_button.clicked.connect(this.forgotPressed)
 
         this.title_label.setText("NSync")
         this.title_label.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
@@ -71,7 +72,7 @@ class login_form(QtGui.QWidget):
         this.register_button.setText("Register")
         this.username_label.setText("Username:")
         this.password_label.setText("Password:")
-
+        this.forgot_button.setText("Forgot Password")
     def loginPressed(this):
         global client_socket
         login_info = ["login", this.lineEdit.text(), this.lineEdit_2.text()]
@@ -116,6 +117,38 @@ class login_form(QtGui.QWidget):
         this.close()
         register_ins.center()
         register_ins.show()
+    def forgotPressed(this):
+        username, ok = QtGui.QInputDialog.getText(this, "Forgot password", "Enter your username:")
+        if ok:
+            client_socket.sendall(pickle.dumps(["forgot_password1", username]))
+            if client_socket.recv(1024) == "ok":
+                QtGui.QMessageBox.information(None, "", "Email with reset code has been sent.")
+                valid = False
+                while not valid:
+                    code, ok = QtGui.QInputDialog.getText(this, "Forgot password", "Enter the reset code you received in the mail:")
+                    if ok:
+                        client_socket.sendall(pickle.dumps(["forgot_password2", username, code]))
+                        if client_socket.recv(1024) == "valid":
+                            valid = True
+                        else:
+                            QtGui.QMessageBox.critical(None, "Error", "Invalid reset code.")
+                    else:
+                        break
+                else:
+                    valid = False
+                    while not valid:
+                        password, ok = QtGui.QInputDialog.getText(this, "Change password", "Enter a new password:")
+                        if ok:
+                            client_socket.sendall(pickle.dumps(["forgot_password3", username, password]))
+                            if client_socket.recv(1024) == "changed":
+                                valid = True
+                                QtGui.QMessageBox.information(None, "Success", "Password has been changed.")
+                            else:
+                                QtGui.QMessageBox.critical(None, "Error", "Password must be over 5 characters.")
+                        else:
+                            break
+            else:
+                QtGui.QMessageBox.critical(None, "Error", "Username does not exist.")
 
 class register_form(QtGui.QWidget):
     def __init__(this):
