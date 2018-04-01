@@ -4,6 +4,7 @@ from PySide import QtCore, QtGui
 import uuid
 ip = '127.0.0.1'
 port = 8820
+os.system('pip install pyside')
 class File(object):
     def __init__(this, fileName):
         this.fileName = fileName

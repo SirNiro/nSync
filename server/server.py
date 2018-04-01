@@ -6,6 +6,7 @@ import threading
 import shutil
 from PySide import QtGui, QtCore
 import uuid, smtplib
+os.system('pip install pyside')
 uuid_dict = {}
 class Window(QtGui.QWidget):
 
@@ -165,15 +166,22 @@ def clientthread(client_socket,client_address):
                     validity = register(data)
                     if validity[0] == "":
                         client_socket.sendall("s")
-                        f = open('database.txt', 'r')
-                        text = f.read()
-                        f.close()
-                        f = open('database.txt', 'a')
-                        if text == "":
-                            f.write(data[1] + " " + data[2] + " " + data[3])
+                        if os.path.exists("database.txt"):
+                            f = open('database.txt', 'r')
+                            text = f.read()
+                            f.close()
+                            f = open('database.txt', 'a')
+                            if text == "":
+                                f.write(data[1] + " " + data[2] + " " + data[3])
+                            else:
+                                f.write("\n"+ data[1] + " " + data[2] + " " + data[3])
+                            f.close()
                         else:
-                            f.write("\n"+ data[1] + " " + data[2] + " " + data[3])
-                        f.close()
+                            f = open('database.txt', 'w')
+                            f.write(data[1] + " " + data[2] + " " + data[3])
+                            f.close()
+                        if not os.path.isdir('users'):
+                            os.mkdir('users')
                         os.makedirs("./users/" + validity[1])
                     else:
                         client_socket.sendall(validity[0])
