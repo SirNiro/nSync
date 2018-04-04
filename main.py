@@ -1,7 +1,6 @@
 import sys, socket, os
 import pickle
 from PySide import QtCore, QtGui
-import uuid
 ip = '127.0.0.1'
 port = 8820
 os.system('pip install pyside')
@@ -88,7 +87,6 @@ class login_form(QtGui.QWidget):
             elif data == "login_successful":
                 client_socket.sendall(pickle.dumps(["showDir","./users/" + login_info[1]+"/"]))
                 data = pickle.loads(client_socket.recv(8192))
-                this.close()
                 this.upload_form = upload_form("./users/" + login_info[1]+"/", login_info[1])
                 for x in data:
                     if isinstance(x, Directory):
@@ -96,8 +94,8 @@ class login_form(QtGui.QWidget):
                     else:
                         this.upload_form.addFile(x.fileName)
                 this.upload_form.center()
-
                 this.upload_form.show()
+                this.close()
             else: raise StandardError # for linux
         except:
             try:
@@ -108,49 +106,57 @@ class login_form(QtGui.QWidget):
                 QtGui.QMessageBox.critical(None, "Error", "Server is closed. Try again later")
 
     def center(this):
-        qr = this.frameGeometry() # gets a rectangle with the geometry of the window.
-        cp = QtGui.QDesktopWidget().availableGeometry().center() # gets the center point of the screen resolution of the monitor
-        qr.moveCenter(cp) # sets the center point of the rect to the center of the screen
-        this.move(qr.topLeft()) # moves the top left point of the window to the top left point of the rect
+        qr = this.frameGeometry()  # gets a rectangle with the geometry of the window.
+        cp = QtGui.QDesktopWidget().availableGeometry().center()  # the center point of the resolution of the monitor
+        qr.moveCenter(cp)  # sets the center point of the rect to the center of the screen
+        this.move(qr.topLeft())  # moves the top left point of the window to the top left point of the rect
 
     def registerPressed(this):
         global register_ins
-        this.close()
         register_ins.center()
         register_ins.show()
+        this.close()
     def forgotPressed(this):
+        global client_socket
         username, ok = QtGui.QInputDialog.getText(this, "Forgot password", "Enter your username:")
         if ok:
-            client_socket.sendall(pickle.dumps(["forgot_password1", username]))
-            if client_socket.recv(1024) == "ok":
-                QtGui.QMessageBox.information(None, "", "Email with reset code has been sent.")
-                valid = False
-                while not valid:
-                    code, ok = QtGui.QInputDialog.getText(this, "Forgot password", "Enter the reset code you received in the mail:")
-                    if ok:
-                        client_socket.sendall(pickle.dumps(["forgot_password2", username, code]))
-                        if client_socket.recv(1024) == "valid":
-                            valid = True
-                        else:
-                            QtGui.QMessageBox.critical(None, "Error", "Invalid reset code.")
-                    else:
-                        break
-                else:
+            try:
+                client_socket.sendall(pickle.dumps(["forgot_password1", username]))
+                if client_socket.recv(1024) == "ok":
+                    QtGui.QMessageBox.information(None, "", "Email with reset code has been sent.")
                     valid = False
                     while not valid:
-                        password, ok = QtGui.QInputDialog.getText(this, "Change password", "Enter a new password:")
+                        code, ok = QtGui.QInputDialog.getText(this, "Forgot password", "Enter the reset code you received in the mail:")
                         if ok:
-                            client_socket.sendall(pickle.dumps(["forgot_password3", username, password]))
-                            if client_socket.recv(1024) == "changed":
+                            client_socket.sendall(pickle.dumps(["forgot_password2", username, code]))
+                            if client_socket.recv(1024) == "valid":
                                 valid = True
-                                QtGui.QMessageBox.information(None, "Success", "Password has been changed.")
                             else:
-                                QtGui.QMessageBox.critical(None, "Error", "Password must be over 5 characters.")
+                                QtGui.QMessageBox.critical(None, "Error", "Invalid reset code.")
                         else:
                             break
-            else:
-                QtGui.QMessageBox.critical(None, "Error", "Username does not exist.")
-
+                    else:
+                        valid = False
+                        while not valid:
+                            password, ok = QtGui.QInputDialog.getText(this, "Change password", "Enter a new password:")
+                            if ok:
+                                client_socket.sendall(pickle.dumps(["forgot_password3", username, password, code]))
+                                if client_socket.recv(1024) == "changed":
+                                    valid = True
+                                    QtGui.QMessageBox.information(None, "Success", "Password has been changed.")
+                                else:
+                                    QtGui.QMessageBox.critical(None, "Error", "Password must be over 5 characters.")
+                            else:
+                                break
+                else:
+                    QtGui.QMessageBox.critical(None, "Error", "Username does not exist.")
+            except:
+                try:
+                    client_socket = socket.socket()
+                    client_socket.connect((ip, port))
+                    QtGui.QMessageBox.critical(None, "Error", "Server is closed. Try again later")
+                except:
+                    QtGui.QMessageBox.critical(None, "Error", "Server is closed. Try again later")
 class register_form(QtGui.QWidget):
     def __init__(this):
         super(register_form, this).__init__()
@@ -213,9 +219,9 @@ class register_form(QtGui.QWidget):
         this.back_button.setText("Back")
     def backPressed(this):
         global login_ins
-        this.close()
         login_ins.center()
         login_ins.show()
+        this.close()
     def is_ascii(this, text):
         try:
             text.decode('ascii')
@@ -266,9 +272,9 @@ class register_form(QtGui.QWidget):
                         this.wrong_password_label.setText("Password must\nbe above 5\ncharacters")
                     elif data == 's':
                         QtGui.QMessageBox.information(None, "Success", "You have been registered, now login.")
-                        this.close()
                         login_ins.center()
                         login_ins.show()
+                        this.close()
                     else:
                         raise StandardError # for linux
                 except:
@@ -293,6 +299,12 @@ class upload_form(QtGui.QWidget):
         global client_socket
         global lastpath
         lastpath = ""
+        global uploading
+        uploading = False
+        global downloading
+        downloading = False
+        global stop
+        stop = False
         this.uploadThread = UploadThread()
         this.downloadThread = DownloadThread()
         this.connect(this.uploadThread, QtCore.SIGNAL("uploadDone()"), this.uploadDone)
@@ -337,6 +349,16 @@ class upload_form(QtGui.QWidget):
         this.logout_button = QtGui.QPushButton(this)
         this.logout_button.setGeometry(QtCore.QRect(420, 460, 50, 30))
         this.logout_button.clicked.connect(this.logoutPressed)
+
+        this.refresh_button = QtGui.QPushButton(this)
+        this.refresh_button.setGeometry(10, 460, 50, 30)
+        this.refresh_button.clicked.connect(this.refreshPressed)
+
+        this.cancel_button = QtGui.QPushButton(this)
+        this.cancel_button.setGeometry(295, 462, 50, 30)
+        this.cancel_button.clicked.connect(this.cancelPressed)
+        this.cancel_button.hide()
+
         this.lineEdit = QtGui.QLineEdit(this)
         this.lineEdit.setGeometry(QtCore.QRect(10, 50, 460, 29))
         this.lineEdit.setReadOnly(True)
@@ -359,11 +381,10 @@ class upload_form(QtGui.QWidget):
         this.delete_button.setText("Delete")
         this.download_button.setText("Download")
         this.logout_button.setText("Logout")
+        this.refresh_button.setText("Refresh")
+        this.cancel_button.setText("Cancel")
 
 
-    def msgbox(this):
-        if this.progressBar.value == 100:
-            QtGui.QMessageBox.information(None, "Success", "Upload done!")
     def addDirectory(this, name):
         global diricon
         global dir
@@ -372,18 +393,51 @@ class upload_form(QtGui.QWidget):
         dir.setText(name+"/")
     def itemClicked(this):
         if this.file_list.selectedItems()[0].text()[-1] == "/":
-            this.path += this.file_list.selectedItems()[0].text()
-            global client_socket
-            client_socket.sendall(pickle.dumps(["showDir", this.path]))
-            data = pickle.loads(client_socket.recv(8192))
-            this.clearFileList(data)
+            global uploading
+            global downloading
+            if uploading or downloading:
+                if uploading:
+                    QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+                if downloading:
+                    QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+            else:
+                newpath = this.path + this.file_list.selectedItems()[0].text()
+                global client_socket
+                client_socket.sendall(pickle.dumps(["showDir", newpath]))
+                data = pickle.loads(client_socket.recv(8192))
+                if data != "doesn't exist":
+                    this.clearFileList(data)
+                    this.path = newpath
+                else:
+                    if this.path == "./users/" + this.username + "/":
+                        QtGui.QMessageBox.critical(None, "Error","The folder you're trying to navigate to does not exist anymore.\nRefreshing..")
+                    else:
+                        QtGui.QMessageBox.critical(None, "Error","The folder you're trying to navigate to does not exist anymore.\nReturning to root.")
+                    client_socket.sendall(pickle.dumps(["showDir", "./users/" + this.username + "/"]))
+                    data = pickle.loads(client_socket.recv(8192))
+                    this.clearFileList(data)
         elif this.file_list.selectedItems()[0].text() == "..":
             if this.path != "./users/" + this.username+"/":
-                this.path = this.path[:this.path.rfind("/")]
-                this.path = this.path[:this.path.rfind("/")+1]
-                client_socket.sendall(pickle.dumps(["showDir", this.path]))
-                data = pickle.loads(client_socket.recv(8192))
-                this.clearFileList(data)
+                if uploading or downloading:
+                    if uploading:
+                        QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+                    if downloading:
+                        QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+                else:
+                    newpath = this.path[:this.path.rfind("/")]
+                    newpath = newpath[:newpath.rfind("/")+1]
+                    client_socket.sendall(pickle.dumps(["showDir", newpath]))
+                    data = pickle.loads(client_socket.recv(8192))
+                    if data != "doesn't exist":
+                        this.path = newpath
+                        this.clearFileList(data)
+                    else:
+                        QtGui.QMessageBox.critical(None, "Error", "The folder you're trying to navigate to does not exist anymore.\nReturning to root.")
+                        this.path = "./users/" + this.username + "/"
+                        client_socket.sendall(pickle.dumps(["showDir", this.path]))
+                        data = pickle.loads(client_socket.recv(8192))
+                        this.clearFileList(data)
+
     def addFile(this, name):
         file = QtGui.QListWidgetItem(this.file_list)
         file.setText(name)
@@ -396,116 +450,183 @@ class upload_form(QtGui.QWidget):
         filename = QtGui.QFileDialog.getOpenFileName(caption='Open file')
         if filename[0] != "": this.lineEdit.setText(filename[0])
     def createFolderPressed(this):
-        dirName, ok = QtGui.QInputDialog.getText(this, 'Create a folder','Enter folder name:')
-        valid = True
-        if ok:
-            if dirName == "" :
-                valid = False
-                QtGui.QMessageBox.critical(None, "Error",'A folder\'s name can\'t be blank.')
-            elif "/" in dirName or "\\" in dirName or "?" in dirName or "|" in dirName or "*" in dirName or ":" in dirName or "<" in dirName or ">" in dirName or '"' in dirName or dirName[0] == ".":
-                valid = False
-                QtGui.QMessageBox.critical(None, "Error", 'A folder\'s name can\'t contain any of the following characters:\n \\ / : * ? " < > |, or begin with a dot.')
-            exists = False
-            if valid == True:
-                for x in xrange(this.file_list.count()):
-                    if this.file_list.item(x).text() == dirName + "/" or this.file_list.item(x).text() == dirName :
-                        exists = True
-                        QtGui.QMessageBox.critical(None, "Error","A folder with that name already exists.")
-                        break
-            if not exists and valid:
-                global client_socket
-                client_socket.sendall(pickle.dumps(["mkdir",this.path+dirName+"/"]))
-                data = pickle.loads(client_socket.recv(8192))
-                this.clearFileList(data)
-    def renamePressed(this):
-        if this.file_list.selectedItems(): # if list is not empty
-            if this.file_list.selectedItems()[0].text() != "..":
-                if "/" in this.file_list.selectedItems()[0].text():
-                    newName, ok = QtGui.QInputDialog.getText(this, 'Rename File/Directory', 'Enter a new name:', text=this.file_list.selectedItems()[0].text()[0:-1])
-                else:
-                    newName, ok = QtGui.QInputDialog.getText(this, 'Rename File/Directory', 'Enter a new name:', text=this.file_list.selectedItems()[0].text())
-                valid = True
-                if ok:
-                    if newName == "":
-                        valid = False
-                        QtGui.QMessageBox.critical(None, "Error",'A new name can\'t be blank.')
-                    elif "/" in newName or "\\" in newName or "?" in newName or "|" in newName or "*" in newName or ":" in newName or "<" in newName or ">" in newName or '"' in newName or newName[0] == ".":
-                        valid = False
-                        QtGui.QMessageBox.critical(None, "Error",'A new name can\'t contain any of the following characters:\n \\ / : * ? " < > |, or begin with a dot.')
-                    exists = False
-                    if valid:
-                        for x in xrange(this.file_list.count()):
-                            if this.file_list.item(x).text() == newName + "/":
-                                exists = True
-                                QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.")
-                                break
-                    if not exists and valid:
-                        global client_socket
-                        client_socket.sendall(pickle.dumps(["mv", this.path + this.file_list.selectedItems()[0].text(), this.path + newName]))
-                        data = pickle.loads(client_socket.recv(8192))
-                        this.clearFileList(data)
-    def deletePressed(this):
-        print this.path
-        if this.file_list.selectedItems(): # if list is not empty
-            if this.file_list.selectedItems()[0].text() != "..":
-                qm = QtGui.QMessageBox
-                ret = qm.question(this, 'Confirm', 'Are you sure you want to delete that file/folder?', qm.Yes | qm.No)
-                if ret == qm.Yes:
-                    if "/" in this.file_list.selectedItems()[0].text():
-                        client_socket.sendall(pickle.dumps(["rmdir", this.path + this.file_list.selectedItems()[0].text()]))
-                    else:
-                        client_socket.sendall(pickle.dumps(["rm", this.path + this.file_list.selectedItems()[0].text()]))
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            dirName, ok = QtGui.QInputDialog.getText(this, 'Create a folder','Enter folder name:')
+            valid = True
+            if ok:
+                if dirName == "" :
+                    valid = False
+                    QtGui.QMessageBox.critical(None, "Error",'A folder\'s name can\'t be blank.')
+                elif "/" in dirName or "\\" in dirName or "?" in dirName or "|" in dirName or "*" in dirName or ":" in dirName or "<" in dirName or ">" in dirName or '"' in dirName or dirName[0] == ".":
+                    valid = False
+                    QtGui.QMessageBox.critical(None, "Error", 'A folder\'s name can\'t contain any of the following characters:\n \\ / : * ? " < > |, or begin with a dot.')
+                exists = False
+                if valid == True:
+                    for x in xrange(this.file_list.count()):
+                        if this.file_list.item(x).text() == dirName + "/" or this.file_list.item(x).text() == dirName :
+                            exists = True
+                            QtGui.QMessageBox.critical(None, "Error","A folder with that name already exists.")
+                            break
+                if not exists and valid:
+                    global client_socket
+                    client_socket.sendall(pickle.dumps(["mkdir",this.path+dirName+"/"]))
                     data = pickle.loads(client_socket.recv(8192))
+                    if data == "already exists":
+                        QtGui.QMessageBox.critical(None, "Error","A folder with that name already exists.\nRefreshing..")
+                        client_socket.sendall(pickle.dumps(["showDir", this.path]))
+                        data = pickle.loads(client_socket.recv(8192))
                     this.clearFileList(data)
+    def renamePressed(this):
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            if this.file_list.selectedItems(): # if list is not empty
+                if this.file_list.selectedItems()[0].text() != "..":
+                    if "/" in this.file_list.selectedItems()[0].text():
+                        newName, ok = QtGui.QInputDialog.getText(this, 'Rename File/Directory', 'Enter a new name:', text=this.file_list.selectedItems()[0].text()[0:-1])
+                    else:
+                        newName, ok = QtGui.QInputDialog.getText(this, 'Rename File/Directory', 'Enter a new name:', text=this.file_list.selectedItems()[0].text())
+                    valid = True
+                    if ok:
+                        if newName == "":
+                            valid = False
+                            QtGui.QMessageBox.critical(None, "Error",'A new name can\'t be blank.')
+                        elif "/" in newName or "\\" in newName or "?" in newName or "|" in newName or "*" in newName or ":" in newName or "<" in newName or ">" in newName or '"' in newName or newName[0] == ".":
+                            valid = False
+                            QtGui.QMessageBox.critical(None, "Error",'A new name can\'t contain any of the following characters:\n \\ / : * ? " < > |, or begin with a dot.')
+                        exists = False
+                        if valid:
+                            for x in xrange(this.file_list.count()):
+                                if this.file_list.item(x).text() == newName + "/":
+                                    exists = True
+                                    QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.")
+                                    break
+                        if not exists and valid:
+                            global client_socket
+                            client_socket.sendall(pickle.dumps(["mv", this.path + this.file_list.selectedItems()[0].text(), this.path + newName]))
+                            data = pickle.loads(client_socket.recv(8192))
+                            if data == "already exists":
+                                QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.\nRefreshing..")
+                                client_socket.sendall(pickle.dumps(["showDir", this.path]))
+                                data = pickle.loads(client_socket.recv(8192))
+                            this.clearFileList(data)
+    def deletePressed(this):
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            print this.path
+            if this.file_list.selectedItems(): # if list is not empty
+                if this.file_list.selectedItems()[0].text() != "..":
+                    qm = QtGui.QMessageBox
+                    ret = qm.question(this, 'Confirm', 'Are you sure you want to delete that file/folder?', qm.Yes | qm.No)
+                    if ret == qm.Yes:
+                        if "/" in this.file_list.selectedItems()[0].text():
+                            client_socket.sendall(pickle.dumps(["rmdir", this.path + this.file_list.selectedItems()[0].text()]))
+                        else:
+                            print this.path + this.file_list.selectedItems()[0].text()
+                            client_socket.sendall(pickle.dumps(["rm", this.path + this.file_list.selectedItems()[0].text()]))
+                        data = pickle.loads(client_socket.recv(8192))
+                        if data == "doesn't exist":
+                            QtGui.QMessageBox.critical(None, "Error", "The file/folder you're trying to delete does not exist anymore.\nRefreshing..")
+                            client_socket.sendall(pickle.dumps(["showDir", this.path]))
+                            data = pickle.loads(client_socket.recv(8192))
+                        this.clearFileList(data)
     def updateProgress(this):
         global percent
         this.progressBar.setValue(percent)
     def uploadPressed(this):
-        global filepath
-        filepath = this.lineEdit.text()
-        exists = False
-        if filepath != "":
-            for x in xrange(this.file_list.count()):
-                if this.file_list.item(x).text()[-1] == "/":
-                    if this.file_list.item(x).text()[0:-1] == (filepath[filepath.rfind("/") + 1:]):
-                        QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.")
-                        exists = True
-                        break
-                else:
-                    if this.file_list.item(x).text() == (filepath[filepath.rfind("/") + 1:]):
-                        QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.")
-                        exists = True
-                        break
-            if not exists:
-                client_socket.sendall("upload")
-                client_socket.recv(1024)
-                global size
-                size = os.path.getsize(filepath)
-                client_socket.sendall(pickle.dumps(size))
-                size = float(size) / 1024
-                client_socket.recv(1024)
-                client_socket.sendall(pickle.dumps(this.path + (filepath[filepath.rfind("/") + 1:])))  # for ascii and unicode
-                client_socket.recv(1024)
-                this.progressBar.setValue(0)
-                this.uploadThread.start()
-    def downloadPressed(this):
-        if this.file_list.selectedItems():
-            if this.file_list.selectedItems()[0].text()[-1] != "/":
-                this.download_dialog = QtGui.QFileDialog()
-                global lastpath
-                global download_path
-                download_path = this.download_dialog.getSaveFileName(this, "Download File", lastpath+this.file_list.selectedItems()[0].text())
-                if download_path[0] != "":
-                    lastpath = download_path[0]
-                    lastpath = lastpath[:lastpath.rfind("/")+1]
-                    print lastpath
-                    client_socket.sendall("download")
-                    client_socket.recv(1024)
-                    client_socket.sendall(pickle.dumps(this.path+this.file_list.selectedItems()[0].text()))
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            global filepath
+            filepath = this.lineEdit.text()
+            exists = False
+            if filepath != "":
+                for x in xrange(this.file_list.count()):
+                    if this.file_list.item(x).text()[-1] == "/":
+                        if this.file_list.item(x).text()[0:-1] == (filepath[filepath.rfind("/") + 1:]):
+                            QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.")
+                            exists = True
+                            break
+                    else:
+                        if this.file_list.item(x).text() == (filepath[filepath.rfind("/") + 1:]):
+                            QtGui.QMessageBox.critical(None, "Error", "A file/folder with that name already exists.")
+                            exists = True
+                            break
+                if not exists:
                     global size
-                    size = pickle.loads(client_socket.recv(1024))
-                    this.progressBar.setValue(0)
-                    this.downloadThread.start()
+                    size = os.path.getsize(filepath)
+                    if size != 0:
+                        client_socket.sendall("upload")
+                        client_socket.recv(1024)
+                        client_socket.sendall(pickle.dumps(size))
+                        size = float(size) / 1024
+                        client_socket.recv(1024)
+                        client_socket.sendall(pickle.dumps(this.path + (filepath[filepath.rfind("/") + 1:])))
+                        client_socket.recv(1024)
+                        this.progressBar.setValue(0)
+                        uploading = True
+                        this.uploadThread.start()
+                        this.cancel_button.show()
+                    else:
+                        client_socket.sendall(pickle.dumps(["upload_empty",this.path + (filepath[filepath.rfind("/") + 1:])]))
+                        data = pickle.loads(client_socket.recv(8192))
+                        this.clearFileList(data)
+                        this.lineEdit.setText("")
+                        this.progressBar.setValue(100)
+                        QtGui.QMessageBox.information(None, "Success", "Upload done!")
+            else:
+                QtGui.QMessageBox.critical(None, "Error", "Select a path first by clicking the browse button.")
+    def downloadPressed(this):
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            if this.file_list.selectedItems():
+                if this.file_list.selectedItems()[0].text()[-1] != "/":
+                    this.download_dialog = QtGui.QFileDialog()
+                    global lastpath
+                    global download_path
+                    download_path = this.download_dialog.getSaveFileName(this, "Download File", lastpath+this.file_list.selectedItems()[0].text())
+                    if download_path[0] != "":
+                        lastpath = download_path[0]
+                        lastpath = lastpath[:lastpath.rfind("/")+1]
+                        print lastpath
+                        client_socket.sendall("download")
+                        client_socket.recv(1024)
+                        client_socket.sendall(pickle.dumps(this.path+this.file_list.selectedItems()[0].text()))
+                        global size
+                        size = pickle.loads(client_socket.recv(1024))
+                        this.progressBar.setValue(0)
+                        downloading = True
+                        this.downloadThread.start()
+                        this.cancel_button.show()
     def clearFileList(this, data):
         this.file_list.clear()
         for x in data:
@@ -514,34 +635,85 @@ class upload_form(QtGui.QWidget):
             else:
                 this.addFile(x.fileName)
     def logoutPressed(this):
-        global login_ins
-        this.close()
-        login_ins.center()
-        login_ins.show()
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            global login_ins
+            login_ins.center()
+            login_ins.show()
+            this.close()
+    def refreshPressed(this):
+        global uploading
+        global downloading
+        if uploading or downloading:
+            if uploading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for upload to finish, or press cancel.")
+            if downloading:
+                QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
+        else:
+            client_socket.sendall(pickle.dumps(["showDir", this.path]))
+            data = pickle.loads(client_socket.recv(8192))
+            if data == "doesn't exist":
+                QtGui.QMessageBox.critical(None, "Error","The folder you're trying to refresh does not exist anymore.\nReturning to root.")
+                this.path = "./users/" + this.username + "/"
+                client_socket.sendall(pickle.dumps(["showDir", this.path]))
+                data = pickle.loads(client_socket.recv(8192))
+            this.clearFileList(data)
+    def cancelPressed(this):
+        global stop
+        stop = True
     def uploadDone(this):
         data = pickle.loads(client_socket.recv(8192))
         this.clearFileList(data)
         this.lineEdit.setText("")
-        this.progressBar.setValue(100)
-        QtGui.QMessageBox.information(None, "Success", "Upload done!")
+        global stop
+        global uploading
+        if stop:
+            this.progressBar.setValue(0)
+            QtGui.QMessageBox.information(None, "", "Upload canceled.")
+            stop = False
+        else:
+            this.progressBar.setValue(100)
+            QtGui.QMessageBox.information(None, "Success", "Upload done!")
+        uploading = False
+        this.cancel_button.hide()
     def downloadDone(this):
-        this.progressBar.setValue(100)
-        QtGui.QMessageBox.information(None, "Success", "Download done!")
+        global stop
+        global downloading
+        if stop:
+            this.progressBar.setValue(0)
+            QtGui.QMessageBox.information(None, "", "Download canceled.")
+            stop = False
+        else:
+            this.progressBar.setValue(100)
+            QtGui.QMessageBox.information(None, "Success", "Download done!")
+        downloading = False
+        this.cancel_button.hide()
 class UploadThread(QtCore.QThread):
     def __init__(this ,parent=None):
         super(UploadThread, this).__init__(parent)
     def run(this):
         global size
+        global stop
         f = open(filepath, 'rb')
         l = f.read(1024)
         written = 0
         global percent
         while (l):
-            client_socket.sendall(l)
-            l = f.read(1024)
-            written += float(len(l)/1024)
-            percent = int(float(written) / float(size) * 100)
-            this.emit(QtCore.SIGNAL("updateProgress()"))
+            if stop:
+                client_socket.sendall("no")
+                break
+            else:
+                client_socket.sendall("ok" + l)
+                l = f.read(1024)
+                written += float(len(l)/1024)
+                percent = int(float(written) / float(size) * 100)
+                this.emit(QtCore.SIGNAL("updateProgress()"))
         f.close()
         print "Done."
         this.emit(QtCore.SIGNAL("uploadDone()"))
@@ -551,17 +723,27 @@ class DownloadThread(QtCore.QThread):
     def run(this):
         global percent
         written = 0
-        l = client_socket.recv(1024)
+        l = client_socket.recv(1026)
+        client_socket.sendall("ok")
         f = open(download_path[0], 'wb')
+        global stop
         while written <= size:
+            if stop:
+                client_socket.recv(1024)
+                client_socket.sendall("no")
+                f.close()
+                os.remove(download_path[0])
+                break
             f.write(l)
             written += len(l)
             percent = int(float(written)/ float(size) * 100)
             this.emit(QtCore.SIGNAL("updateProgress()"))
             if written >= size:
                 break
-            l = client_socket.recv(1024)
-        f.close()
+            l = client_socket.recv(1026)
+            client_socket.sendall("ok")
+        if not stop:
+            f.close()
         print "Done."
         this.emit(QtCore.SIGNAL("downloadDone()"))
 main()

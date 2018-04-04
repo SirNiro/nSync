@@ -4,9 +4,10 @@ import socket
 import pickle
 import threading
 import shutil
+os.system('pip install pyside')
 from PySide import QtGui, QtCore
 import uuid, smtplib
-os.system('pip install pyside')
+import time
 uuid_dict = {}
 class Window(QtGui.QWidget):
 
@@ -25,6 +26,14 @@ class Window(QtGui.QWidget):
         this.close_button.clicked.connect(exit)
         this.close_button.setText("Close Server")
         this.show()
+
+
+def expiry(user, code):
+    time.sleep(300)  # 5 minutes
+    try:
+        uuid_dict[user.username].remove(code)
+    except:
+        pass
 
 
 def clientthread(client_socket,client_address):
@@ -46,60 +55,76 @@ def clientthread(client_socket,client_address):
             pass
         if isinstance(data, list):
                 if data[0] == "showDir":
-                    root, dirs, files = next(os.walk(data[1]))
-                    send = []
-                    send.append(File(".."))
-                    for x in dirs:
-                        send.append(Directory(x))
-                    for x in files:
-                        send.append(File(x))
-                    client_socket.sendall(pickle.dumps(send))
+                    try:
+                        root, dirs, files = next(os.walk(data[1]))
+                        send = []
+                        send.append(File(".."))
+                        for x in dirs:
+                            send.append(Directory(x))
+                        for x in files:
+                            send.append(File(x))
+                        client_socket.sendall(pickle.dumps(send))
+                    except:
+                        print "fuck"
+                        client_socket.sendall(pickle.dumps("doesn't exist"))
                 elif data[0] == "mkdir":
-                    os.makedirs(data[1])
-                    data[1] = data[1][:data[1].rfind("/")]
-                    data[1] = data[1][:data[1].rfind("/")+1]
-                    root, dirs, files = next(os.walk(data[1]))
-                    send = []
-                    send.append(File(".."))
-                    for x in dirs:
-                        send.append(Directory(x))
-                    for x in files:
-                        send.append(File(x))
-                    client_socket.sendall(pickle.dumps(send))
+                    try:
+                        os.makedirs(data[1])
+                        data[1] = data[1][:data[1].rfind("/")]
+                        data[1] = data[1][:data[1].rfind("/")+1]
+                        root, dirs, files = next(os.walk(data[1]))
+                        send = []
+                        send.append(File(".."))
+                        for x in dirs:
+                            send.append(Directory(x))
+                        for x in files:
+                            send.append(File(x))
+                        client_socket.sendall(pickle.dumps(send))
+                    except WindowsError:
+                        client_socket.sendall(pickle.dumps("already exists"))
                 elif data[0] == "rmdir":
-                    shutil.rmtree(data[1])
-                    data[1] = data[1][:data[1].rfind("/")]
-                    data[1] = data[1][:data[1].rfind("/")+1]
-                    root, dirs, files = next(os.walk(data[1]))
-                    send = []
-                    send.append(File(".."))
-                    for x in dirs:
-                        send.append(Directory(x))
-                    for x in files:
-                        send.append(File(x))
-                    client_socket.sendall(pickle.dumps(send))
+                    try:
+                        shutil.rmtree(data[1])
+                        data[1] = data[1][:data[1].rfind("/")]
+                        data[1] = data[1][:data[1].rfind("/")+1]
+                        root, dirs, files = next(os.walk(data[1]))
+                        send = []
+                        send.append(File(".."))
+                        for x in dirs:
+                            send.append(Directory(x))
+                        for x in files:
+                            send.append(File(x))
+                        client_socket.sendall(pickle.dumps(send))
+                    except WindowsError:
+                        client_socket.sendall(pickle.dumps("doesn't exist"))
                 elif data[0] == "rm":
-                    os.remove(data[1])
-                    data[1] = data[1][:data[1].rfind("/")]+"/"
-                    root, dirs, files = next(os.walk(data[1]))
-                    send = []
-                    send.append(File(".."))
-                    for x in dirs:
-                        send.append(Directory(x))
-                    for x in files:
-                        send.append(File(x))
-                    client_socket.sendall(pickle.dumps(send))
+                    try:
+                        os.remove(data[1])
+                        data[1] = data[1][:data[1].rfind("/")]+"/"
+                        root, dirs, files = next(os.walk(data[1]))
+                        send = []
+                        send.append(File(".."))
+                        for x in dirs:
+                            send.append(Directory(x))
+                        for x in files:
+                            send.append(File(x))
+                        client_socket.sendall(pickle.dumps(send))
+                    except WindowsError:
+                        client_socket.sendall(pickle.dumps("doesn't exist"))
                 elif data[0] == "mv":
-                    os.rename(data[1], data[2])
-                    data[2] = data[2][:data[2].rfind("/")]
-                    root, dirs, files = next(os.walk(data[2]))
-                    send = []
-                    send.append(File(".."))
-                    for x in dirs:
-                        send.append(Directory(x))
-                    for x in files:
-                        send.append(File(x))
-                    client_socket.sendall(pickle.dumps(send))
+                    try:
+                        os.rename(data[1], data[2])
+                        data[2] = data[2][:data[2].rfind("/")]
+                        root, dirs, files = next(os.walk(data[2]))
+                        send = []
+                        send.append(File(".."))
+                        for x in dirs:
+                            send.append(Directory(x))
+                        for x in files:
+                            send.append(File(x))
+                        client_socket.sendall(pickle.dumps(send))
+                    except WindowsError:
+                        client_socket.sendall(pickle.dumps("already exists"))
                 elif data[0] == "login":
                     if check_credentials(data):
                         client_socket.sendall("login_successful")
@@ -110,7 +135,10 @@ def clientthread(client_socket,client_address):
                         if x.username == data[1]:
                             client_socket.sendall("ok")
                             random = str(uuid.uuid4())[:6].upper()
-                            uuid_dict[x.username] = random
+                            if x.username in uuid_dict:
+                                uuid_dict[x.username].append(random)
+                            else:
+                                uuid_dict[x.username] = [random]
                             server = smtplib.SMTP('smtp.gmail.com', 587)
                             server.ehlo()
                             server.starttls()
@@ -120,17 +148,22 @@ def clientthread(client_socket,client_address):
                                 "To: " + x.email,
                                 "Subject: Password Reset",
                                 "",
-                                "Your reset code is: " + random
+                                "Your reset code is: " + random +"\nYour code expires in 5 minutes."
                             ])
                             server.sendmail("nsyncmail1@gmail.com", x.email, msg)
                             server.quit()
+                            t2 = threading.Thread(target=expiry, args=(x,random,))
+                            t2.daemon = True
+                            t2.start()
                             break
                     else:
                         client_socket.sendall("not ok")
                 elif data[0] == "forgot_password2":
                     try:
-                        if uuid_dict[data[1]] == data[2]:
-                            client_socket.sendall("valid")
+                        for x in uuid_dict[data[1]]:
+                            if x == data[2]:
+                                client_socket.sendall("valid")
+                                break
                         else:
                             client_socket.sendall("invalid")
                     except:
@@ -158,6 +191,7 @@ def clientthread(client_socket,client_address):
                                 for line in lines:
                                     f.write(line)
                                 f.close()
+                                uuid_dict[x.username].remove(data[3])
                                 client_socket.sendall("changed")
                                 break
                     else:
@@ -185,6 +219,17 @@ def clientthread(client_socket,client_address):
                         os.makedirs("./users/" + validity[1])
                     else:
                         client_socket.sendall(validity[0])
+                elif data[0] == "upload_empty":
+                    f = open(data[1], 'w')
+                    f.close()
+                    root, dirs, files = next(os.walk(data[1][0:data[1].rfind("/")]))
+                    send = []
+                    send.append(File(".."))
+                    for x in dirs:
+                        send.append(Directory(x))
+                    for x in files:
+                        send.append(File(x))
+                    client_socket.sendall(pickle.dumps(send))
         else:
             if data == "upload":
                 client_socket.sendall("ok")
@@ -193,15 +238,20 @@ def clientthread(client_socket,client_address):
                 path = pickle.loads(client_socket.recv(4096))
                 client_socket.sendall("ok")
                 written = 0
-                l = client_socket.recv(1024)
+                l = client_socket.recv(1026)
                 f = open(path, 'wb')
-                while written <= size:
-                    f.write(l)
-                    written += len(l)
+                while written < size:
+                    if l[:2] == "no":
+                        f.close()
+                        os.remove(path)
+                        break
+                    f.write(l[2:])
+                    written += len(l[2:])
                     if written >= size:
                         break
-                    l = client_socket.recv(1024)
-                f.close()
+                    l = client_socket.recv(1026)
+                if l[:2] != "no":
+                    f.close()
                 root, dirs, files = next(os.walk(path[0:path.rfind("/")]))
                 send = []
                 send.append(File(".."))
@@ -219,6 +269,9 @@ def clientthread(client_socket,client_address):
                 l = f.read(1024)
                 while (l):
                     client_socket.sendall(l)
+                    data = client_socket.recv(1024)
+                    if data == "no":
+                        break
                     l = f.read(1024)
                 f.close()
                 print "Done."
