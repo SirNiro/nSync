@@ -1,11 +1,17 @@
 import sys, socket, os
 import pickle
-import errno
+import urllib
 try:
     from PySide import QtGui, QtCore
 except:
     os.system('pip install pyside')
     from PySide import QtGui, QtCore
+if not os.path.exists("if_folder_299060.png"):
+    try:
+        urllib.urlretrieve("https://drive.google.com/uc?id=1tcSrcRpZZ3fgSrWcIHoNyqhw7DHd7Evy&export=download", "if_folder_299060.png")
+    except:
+        pass
+
 ip = '127.0.0.1'
 port = 8820
 class File(object):
@@ -590,7 +596,6 @@ class upload_form(QtGui.QWidget):
                 if downloading:
                     QtGui.QMessageBox.critical(None, "Error", "Must wait for download to finish, or press cancel.")
             else:
-                print this.path
                 if this.file_list.selectedItems(): # if list is not empty
                     if this.file_list.selectedItems()[0].text() != "..":
                         qm = QtGui.QMessageBox
@@ -599,7 +604,6 @@ class upload_form(QtGui.QWidget):
                             if "/" in this.file_list.selectedItems()[0].text():
                                 client_socket.sendall(pickle.dumps(["rmdir", this.path + this.file_list.selectedItems()[0].text()]))
                             else:
-                                print this.path + this.file_list.selectedItems()[0].text()
                                 client_socket.sendall(pickle.dumps(["rm", this.path + this.file_list.selectedItems()[0].text()]))
                             data = pickle.loads(client_socket.recv(8192))
                             if data == "doesn't exist":
@@ -704,7 +708,6 @@ class upload_form(QtGui.QWidget):
                         if download_path[0] != "":
                             lastpath = download_path[0]
                             lastpath = lastpath[:lastpath.rfind("/")+1]
-                            print lastpath
                             client_socket.sendall("download")
                             client_socket.recv(1024)
                             client_socket.sendall(pickle.dumps(this.path+this.file_list.selectedItems()[0].text()))
@@ -826,6 +829,7 @@ class UploadThread(QtCore.QThread):
     def run(this):
         try:
             global size
+            size = int(size)
             global stop
             f = open(filepath, 'rb')
             l = f.read(1024)
@@ -838,11 +842,11 @@ class UploadThread(QtCore.QThread):
                 else:
                     client_socket.sendall("ok" + l)
                     l = f.read(1024)
-                    written += float(len(l)/1024)
+                    written += float(len(l))/1024
+                    written = round(written)
                     percent = int(float(written) / float(size) * 100)
                     this.emit(QtCore.SIGNAL("updateProgress()"))
             f.close()
-            print "Done."
             this.emit(QtCore.SIGNAL("uploadDone()"))
         except:
             this.emit(QtCore.SIGNAL("failMsg()"))
@@ -877,7 +881,6 @@ class DownloadThread(QtCore.QThread):
                 client_socket.sendall("ok")
             if not stop:
                 f.close()
-            print "Done."
             this.emit(QtCore.SIGNAL("downloadDone()"))
         except:
             this.emit(QtCore.SIGNAL("failMsg()"))

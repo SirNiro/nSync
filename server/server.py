@@ -4,12 +4,23 @@ import socket
 import pickle
 import threading
 import shutil
+import urllib
 from functools import partial
 try:
     from PySide import QtGui, QtCore
 except:
     os.system('pip install pyside')
     from PySide import QtGui, QtCore
+if not os.path.exists("if_folder_299060.png"):
+    try:
+        urllib.urlretrieve("https://drive.google.com/uc?id=1tcSrcRpZZ3fgSrWcIHoNyqhw7DHd7Evy&export=download", "if_folder_299060.png")
+    except:
+        pass
+if not os.path.exists("if_user-alt_285645.png"):
+    try:
+        urllib.urlretrieve("https://drive.google.com/uc?id=1JQ_xmjDDVJyCYsppf4psTtK8gyu8ggih&export=download", "if_user-alt_285645.png")
+    except:
+        pass
 import uuid, smtplib
 import time
 uuid_dict = {}
@@ -26,6 +37,9 @@ class Window(QtGui.QWidget):
         this.setWindowTitle('Server Panel')
         this.setWindowIcon(QtGui.QIcon('archlinux-512'))
 
+        global serveropen
+        serveropen = True
+
         this.title_label = QtGui.QLabel(this)
         this.title_label.setGeometry(QtCore.QRect(50, -20, 220, 80))
 
@@ -33,13 +47,18 @@ class Window(QtGui.QWidget):
         this.users_button.setGeometry(QtCore.QRect(100, 40, 100, 50))
         this.users_button.clicked.connect(this.usersPressed)
 
+        this.logs_button = QtGui.QPushButton(this)
+        this.logs_button.setGeometry(QtCore.QRect(100, 130, 100, 50))
+        this.logs_button.clicked.connect(this.logsPressed)
+
         this.close_button = QtGui.QPushButton(this)
         this.close_button.setGeometry(QtCore.QRect(100, 230, 100, 50))
-        this.close_button.clicked.connect(exit)
+        this.close_button.clicked.connect(partial(exit,this.close_button))
 
         this.title_label.setText("NSync Server Panel")
         this.title_label.setFont(QtGui.QFont("Arial", 16, QtGui.QFont.Bold))
         this.users_button.setText("View Users")
+        this.logs_button.setText("View Logs")
         this.close_button.setText("Close Server")
 
     def center(this):
@@ -52,6 +71,10 @@ class Window(QtGui.QWidget):
         us.refresh()
         us.center()
         us.show()
+        this.close()
+    def logsPressed(this):
+        lw.center()
+        lw.show()
         this.close()
 class usersWindow(QtGui.QWidget):
     def __init__(this):
@@ -67,6 +90,9 @@ class usersWindow(QtGui.QWidget):
         this.back_button = QtGui.QPushButton(this)
         this.back_button.setGeometry(QtCore.QRect(5, 475, 61, 20))
         this.back_button.clicked.connect(this.backPressed)
+        this.refresh_button = QtGui.QPushButton(this)
+        this.refresh_button.setGeometry(QtCore.QRect(230, 475, 61, 20))
+        this.refresh_button.clicked.connect(this.refresh)
         global icon
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("if_user-alt_285645.png"), QtGui.QIcon.Selected, QtGui.QIcon.On)
@@ -102,6 +128,7 @@ class usersWindow(QtGui.QWidget):
         this.user_list.setSelectionMode(QtGui.QAbstractItemView.NoSelection)
         this.user_list.setShowGrid(False)
         this.back_button.setText("Back")
+        this.refresh_button.setText("Refresh")
     def refresh(this):
         global view_buttons
         global ban_buttons
@@ -339,20 +366,50 @@ class upload_form(QtGui.QWidget):
                     this.addDirectory(x.dirName)
                 else:
                     this.addFile(x.fileName)
+class logs_form(QtGui.QWidget):
+    def __init__(this):
+        super(logs_form, this).__init__()
+        this.setupUi()
+
+    def setupUi(this):
+        this.resize(350, 400)
+        this.setWindowTitle("Logs")
+        this.back_button = QtGui.QPushButton(this)
+        this.back_button.setGeometry(QtCore.QRect(10, 360, 61, 30))
+        this.back_button.clicked.connect(this.backPressed)
+        this.log_list = QtGui.QListWidget(this)
+        this.log_list.setGeometry(QtCore.QRect(10, 30, 330, 320))
+        this.log_list.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        this.back_button.setText("Back")
+    def center(this):
+        qr = this.frameGeometry()  # gets a rectangle with the geometry of the window.
+        cp = QtGui.QDesktopWidget().availableGeometry().center()  # the center point of the resolution of the monitor
+        qr.moveCenter(cp)  # sets the center point of the rect to the center of the screen
+        this.move(qr.topLeft())  # moves the top left point of the window to the top left point of the rect
+    def backPressed(this):
+        w.center()
+        w.show()
+        this.close()
 def clientthread(client_socket,client_address):
     global f
     global uploading
     uploading = False
     global path
+    global serveropen
     while True:
         try:
             data = client_socket.recv(4096)
+            if not serveropen:
+                client_socket.close()
+                break
         except:
-            print str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected."
+            log = QtGui.QListWidgetItem(lw.log_list)
+            log.setText(str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected.")
             client_socket.close()
             break
         if not data:
-            print str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected."
+            log = QtGui.QListWidgetItem(lw.log_list)
+            log.setText(str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected.")
             client_socket.close()
             break
         try:
@@ -375,6 +432,13 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall(pickle.dumps("doesn't exist"))
                 elif data[0] == "mkdir":
                     try:
+                        username = data[1]
+                        username = username[username.find("/")+1:]
+                        username = username[username.find("/")+1:]
+                        username = username[:username.find("/")]
+                        name = data[1]
+                        name = name[:name.rfind("/")]
+                        name = name[name.rfind("/")+1:]
                         os.makedirs(data[1])
                         data[1] = data[1][:data[1].rfind("/")]
                         data[1] = data[1][:data[1].rfind("/")+1]
@@ -386,12 +450,21 @@ def clientthread(client_socket,client_address):
                         for x in files:
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText(username + " has created a folder named: " + name)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("already exists"))
-                    except:
-                        pass
+                    #except:
+                        #pass
                 elif data[0] == "rmdir":
                     try:
+                        username = data[1]
+                        username = username[username.find("/")+1:]
+                        username = username[username.find("/")+1:]
+                        username = username[:username.find("/")]
+                        name = data[1]
+                        name = name[:name.rfind("/")]
+                        name = name[name.rfind("/")+1:]
                         shutil.rmtree(data[1])
                         data[1] = data[1][:data[1].rfind("/")]
                         data[1] = data[1][:data[1].rfind("/")+1]
@@ -403,12 +476,20 @@ def clientthread(client_socket,client_address):
                         for x in files:
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText(username + " has deleted a folder named: " + name)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("doesn't exist"))
                     except:
                         pass
                 elif data[0] == "rm":
                     try:
+                        username = data[1]
+                        username = username[username.find("/")+1:]
+                        username = username[username.find("/")+1:]
+                        username = username[:username.find("/")]
+                        name = data[1]
+                        name = name[name.rfind("/")+1:]
                         os.remove(data[1])
                         data[1] = data[1][:data[1].rfind("/")]+"/"
                         root, dirs, files = next(os.walk(data[1]))
@@ -419,12 +500,33 @@ def clientthread(client_socket,client_address):
                         for x in files:
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText(username + " has deleted a file named: " + name)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("doesn't exist"))
                     except:
                         pass
                 elif data[0] == "mv":
                     try:
+                        if data[1][-1] == "/":
+                            folder = True
+                        else:
+                            folder = False
+                        username = data[1]
+                        username = username[username.find("/")+1:]
+                        username = username[username.find("/")+1:]
+                        username = username[:username.find("/")]
+                        name = data[1]
+                        name1 = data[2]
+                        if folder:
+                            name = name[:name.rfind("/")]
+                            name = name[name.rfind("/") + 1:]
+                            name1 = name1[:name1.rfind("/")]
+                            name1 = name1[name1.rfind("/") + 1:]
+                        else:
+                            name = name[name.rfind("/") + 1:]
+                            name1 = name1[name1.rfind("/") + 1:]
+
                         os.rename(data[1], data[2])
                         data[2] = data[2][:data[2].rfind("/")]
                         root, dirs, files = next(os.walk(data[2]))
@@ -435,6 +537,11 @@ def clientthread(client_socket,client_address):
                         for x in files:
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        if folder:
+                            log.setText(username + " has renamed a folder named: " + name + " to: " + name1)
+                        else:
+                            log.setText(username + " has renamed a file named: " + name + " to: " + name1)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("already exists"))
                     except:
@@ -516,6 +623,8 @@ def clientthread(client_socket,client_address):
                     validity = register(data, client_socket)
                     if validity[0] == "":
                         client_socket.sendall("s")
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText("A new user named: " + data[1] + " has been registered")
                         if os.path.exists("database.txt"):
                             f = open('database.txt', 'r')
                             text = f.read()
@@ -537,6 +646,12 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall(validity[0])
                 elif data[0] == "upload_empty":
                     try:
+                        username = data[1]
+                        username = username[username.find("/")+1:]
+                        username = username[username.find("/")+1:]
+                        username = username[:username.find("/")]
+                        name = data[1]
+                        name = name[name.rfind("/")+1:]
                         f = open(data[1], 'w')
                         f.close()
                         root, dirs, files = next(os.walk(data[1][0:data[1].rfind("/")]))
@@ -547,6 +662,8 @@ def clientthread(client_socket,client_address):
                         for x in files:
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText(username + " has uploaded a new file named: " + name)
                     except:
                         client_socket.sendall(pickle.dumps("doesn't exist"))
         else:
@@ -557,6 +674,12 @@ def clientthread(client_socket,client_address):
                 client_socket.sendall("ok")
                 path = pickle.loads(client_socket.recv(4096))
                 exception = False
+                username = path
+                username = username[username.find("/") + 1:]
+                username = username[username.find("/") + 1:]
+                username = username[:username.find("/")]
+                name = path
+                name = name[name.rfind("/") + 1:]
                 try:
                     f = open(path, 'wb')
                 except:
@@ -578,6 +701,8 @@ def clientthread(client_socket,client_address):
                         l = client_socket.recv(1026)
                     if l[:2] != "no":
                         f.close()
+                    log = QtGui.QListWidgetItem(lw.log_list)
+                    log.setText(username + " has uploaded a new file named: " + name)
                     root, dirs, files = next(os.walk(path[0:path.rfind("/")]))
                     send = []
                     send.append(File(".."))
@@ -590,6 +715,12 @@ def clientthread(client_socket,client_address):
             elif data == "download":
                 client_socket.sendall("ok")
                 path = pickle.loads(client_socket.recv(4096))
+                username = path
+                username = username[username.find("/") + 1:]
+                username = username[username.find("/") + 1:]
+                username = username[:username.find("/")]
+                name = path
+                name = name[name.rfind("/") + 1:]
                 exception = False
                 download_empty = False
                 try:
@@ -597,6 +728,8 @@ def clientthread(client_socket,client_address):
                     if size == 0:
                         download_empty = True
                         client_socket.sendall(pickle.dumps("download_empty"))
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText(username + " has downloaded a new file named: " + name)
                     else:
                         client_socket.sendall(pickle.dumps(size))
                 except:
@@ -613,7 +746,8 @@ def clientthread(client_socket,client_address):
                             break
                         l = f.read(1024)
                     f.close()
-                    print "Done."
+                    log = QtGui.QListWidgetItem(lw.log_list)
+                    log.setText(username + " has downloaded a file named: " + name)
 class User(object):
     def __init__(this, username, email, password, s=None):
         this.username = username
@@ -655,23 +789,47 @@ class File(object):
 class Directory(object):
     def __init__(this, dirName):
         this.dirName = dirName
-def exit():
-    if uploading:
-        f.close()
-        os.remove(path)
-    global clients
-    for x in clients:
-        x[0].close()
-    server_socket.close()
-    sys.exit()
-    os._exit(0)
+def exit(close_button):
+    global serveropen
+    global uploading
+    global t1
+    global server_socket
+    if serveropen:
+        if uploading:
+            f.close()
+            os.remove(path)
+        global clients
+        for x in clients:
+            x[0].close()
+        del clients[:]
+        server_socket.close()
+        temp_socket = socket.socket()
+        temp_socket.connect(("127.0.0.1", 8820))
+        temp_socket.close()
+        close_button.setText("Open Server")
+    else:
+        server_socket = socket.socket()
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind(('0.0.0.0', 8820))
+        server_socket.listen(100)
+        uploading = False
+        t1 = threading.Thread(target=acceptClients)
+        t1.daemon = True
+        t1.start()
+        close_button.setText("Close Server")
+    serveropen = not serveropen
 def acceptClients():
     global clients
     clients = []
+    global serveropen
+    global server_socket
     while True:
         (client_socket, client_address) = server_socket.accept()
+        if not serveropen:
+            break
         clients.append((client_socket, client_address))
-        print str(client_address[0]) + ":" + str(client_address[1]) + " has connected."
+        log = QtGui.QListWidgetItem(lw.log_list)
+        log.setText(str(client_address[0]) + ":" + str(client_address[1]) + " has connected.")
         t = threading.Thread(target=clientthread, args=(client_socket, client_address,))
         t.daemon = True
         t.start()
@@ -685,16 +843,19 @@ if os.path.exists("database.txt"):
             username, email, password = x.split()
             users.append(User(username, email, password))
 server_socket = socket.socket()
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server_socket.bind(('0.0.0.0', 8820))
-server_socket.listen(3)
+server_socket.listen(100)
 global uploading
 uploading = False
+global t1
 t1 = threading.Thread(target=acceptClients)
 t1.daemon = True
 t1.start()
 a = QtGui.QApplication(sys.argv)
 w = Window()
 us = usersWindow()
+lw = logs_form()
 w.show()
 a.exec_()
 
