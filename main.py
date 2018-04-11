@@ -648,25 +648,20 @@ class upload_form(QtGui.QWidget):
                     if not exists:
                         global size
                         size = os.path.getsize(filepath)
+                        size = size/1024
                         if size != 0:
                             client_socket.sendall("upload")
-                            client_socket.recv(1024)
-                            client_socket.sendall(pickle.dumps(size))
-                            size = float(size) / 1024
-                            client_socket.recv(1024)
+                            print "Sent upload"
+                            upload_port = client_socket.recv(1024)
+                            global upload_socket
+                            upload_socket = socket.socket()
+                            upload_socket.connect((ip,int(upload_port)))
                             client_socket.sendall(pickle.dumps(this.path + (filepath[filepath.rfind("/") + 1:])))
-                            data = client_socket.recv(1024)
-                            if data == "doesn't exist":
-                                QtGui.QMessageBox.critical(None, "Error", "The folder you're trying to upload to does not exist anymore.\nReturning to root..")
-                                this.path = "./users/" + this.username + "/"
-                                client_socket.sendall(pickle.dumps(["showDir", this.path]))
-                                data = pickle.loads(client_socket.recv(8192))
-                                this.clearFileList(data)
-                            else:
-                                this.progressBar.setValue(0)
-                                uploading = True
-                                this.uploadThread.start()
-                                this.cancel_button.show()
+                            client_socket.recv(1024)
+                            this.progressBar.setValue(0)
+                            uploading = True
+                            this.uploadThread.start()
+                            this.cancel_button.show()
                         else:
                             client_socket.sendall(pickle.dumps(["upload_empty",this.path + (filepath[filepath.rfind("/") + 1:])]))
                             data = pickle.loads(client_socket.recv(8192))
@@ -785,8 +780,8 @@ class upload_form(QtGui.QWidget):
         stop = True
     def uploadDone(this):
         try:
-            data = pickle.loads(client_socket.recv(8192))
-            this.clearFileList(data)
+            client_socket.sendall("ok")
+            client_socket.recv(1024)
             this.lineEdit.setText("")
             global stop
             global uploading
@@ -799,6 +794,8 @@ class upload_form(QtGui.QWidget):
                 QtGui.QMessageBox.information(None, "Success", "Upload done!")
             uploading = False
             this.cancel_button.hide()
+            #client_socket.recv(8192)
+            this.refreshPressed()
         except:
             QtGui.QMessageBox.critical(None, "Error", "Server is closed. Please try again later.")
             global login_ins
@@ -826,31 +823,43 @@ class upload_form(QtGui.QWidget):
 class UploadThread(QtCore.QThread):
     def __init__(this ,parent=None):
         super(UploadThread, this).__init__(parent)
+        global upload_socket
+        global client_socket
     def run(this):
         try:
-            global size
-            size = int(size)
             global stop
             f = open(filepath, 'rb')
-            l = f.read(1024)
-            written = 0
+            global size
+            print size
+            print "opened"
             global percent
+            written = 0
+            l = f.read(1024)
+            written += float(len(l)) / 1024
+            written = round(written)
+            percent = int(float(written) / float(size) * 100)
+            this.emit(QtCore.SIGNAL("updateProgress()"))
             while (l):
                 if stop:
-                    client_socket.sendall("no")
+                    print "stopping"
+                    client_socket.send("no")
                     break
                 else:
-                    client_socket.sendall("ok" + l)
+                    upload_socket.send(l)
+                    upload_socket.recv(1024)
+                    client_socket.send("ok")
+                    client_socket.recv(1024)
                     l = f.read(1024)
-                    written += float(len(l))/1024
+                    written += float(len(l)) / 1024
                     written = round(written)
                     percent = int(float(written) / float(size) * 100)
                     this.emit(QtCore.SIGNAL("updateProgress()"))
             f.close()
+            upload_socket.close()
+            print "done"
             this.emit(QtCore.SIGNAL("uploadDone()"))
         except:
             this.emit(QtCore.SIGNAL("failMsg()"))
-
 
 
 class DownloadThread(QtCore.QThread):

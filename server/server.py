@@ -5,6 +5,7 @@ import pickle
 import threading
 import shutil
 import urllib
+import random as rand
 from functools import partial
 try:
     from PySide import QtGui, QtCore
@@ -668,50 +669,40 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall(pickle.dumps("doesn't exist"))
         else:
             if data == "upload":
-                uploading = True
-                client_socket.sendall("ok")
-                size = pickle.loads(client_socket.recv(4096))
-                client_socket.sendall("ok")
+                upload_socket = socket.socket()
+                while True:
+                    upload_port = rand.randint(8821, 9000)
+                    try:
+                        upload_socket.bind(('0.0.0.0', upload_port))
+                        client_socket.sendall(str(upload_port))
+                        upload_socket.listen(1)
+                        (cupload_socket, cupload_address) = upload_socket.accept()
+                        print cupload_address[0] + " has connected"
+                        break
+                    except:
+                        pass
                 path = pickle.loads(client_socket.recv(4096))
-                exception = False
-                username = path
-                username = username[username.find("/") + 1:]
-                username = username[username.find("/") + 1:]
-                username = username[:username.find("/")]
-                name = path
-                name = name[name.rfind("/") + 1:]
-                try:
-                    f = open(path, 'wb')
-                except:
-                    exception = True
-                    client_socket.sendall("doesn't exist")
-                if not exception:
-                    client_socket.sendall("ok")
-                    written = 0
-                    l = client_socket.recv(1026)
-                    while written < size:
-                        if l[:2] == "no":
-                            f.close()
-                            os.remove(path)
-                            break
-                        f.write(l[2:])
-                        written += len(l[2:])
-                        if written >= size:
-                            break
-                        l = client_socket.recv(1026)
-                    if l[:2] != "no":
-                        f.close()
-                    log = QtGui.QListWidgetItem(lw.log_list)
-                    log.setText(username + " has uploaded a new file named: " + name)
-                    root, dirs, files = next(os.walk(path[0:path.rfind("/")]))
-                    send = []
-                    send.append(File(".."))
-                    for x in dirs:
-                        send.append(Directory(x))
-                    for x in files:
-                        send.append(File(x))
-                    client_socket.sendall(pickle.dumps(send))
-                    uploading = False
+                f = open(path, 'wb')
+                client_socket.send("exists")
+                l = cupload_socket.recv(1024)
+                cupload_socket.send("ok")
+                a = client_socket.recv(1024)
+                client_socket.send("ok")
+                while (l):
+                    if a == "no":
+                        print "removed"
+                        break
+                    f.write(l)
+                    l = cupload_socket.recv(1024)
+                    cupload_socket.send("ok")
+                    a = client_socket.recv(1024)
+                    client_socket.send("ok")
+                f.close()
+                if a == "no":
+                    os.remove(path)
+                print "done"
+                upload_socket.close()
+
             elif data == "download":
                 client_socket.sendall("ok")
                 path = pickle.loads(client_socket.recv(4096))
