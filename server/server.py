@@ -455,8 +455,8 @@ def clientthread(client_socket,client_address):
                         log.setText(username + " has created a folder named: " + name)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("already exists"))
-                    #except:
-                        #pass
+                    except:
+                        pass
                 elif data[0] == "rmdir":
                     try:
                         username = data[1]
@@ -669,6 +669,8 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall(pickle.dumps("doesn't exist"))
         else:
             if data == "upload":
+                uploading = True
+                exception = False
                 upload_socket = socket.socket()
                 while True:
                     upload_port = rand.randint(8821, 9000)
@@ -677,34 +679,9 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall(str(upload_port))
                         upload_socket.listen(1)
                         (cupload_socket, cupload_address) = upload_socket.accept()
-                        print cupload_address[0] + " has connected"
                         break
                     except:
                         pass
-                path = pickle.loads(client_socket.recv(4096))
-                f = open(path, 'wb')
-                client_socket.send("exists")
-                l = cupload_socket.recv(1024)
-                cupload_socket.send("ok")
-                a = client_socket.recv(1024)
-                client_socket.send("ok")
-                while (l):
-                    if a == "no":
-                        print "removed"
-                        break
-                    f.write(l)
-                    l = cupload_socket.recv(1024)
-                    cupload_socket.send("ok")
-                    a = client_socket.recv(1024)
-                    client_socket.send("ok")
-                f.close()
-                if a == "no":
-                    os.remove(path)
-                print "done"
-                upload_socket.close()
-
-            elif data == "download":
-                client_socket.sendall("ok")
                 path = pickle.loads(client_socket.recv(4096))
                 username = path
                 username = username[username.find("/") + 1:]
@@ -712,33 +689,73 @@ def clientthread(client_socket,client_address):
                 username = username[:username.find("/")]
                 name = path
                 name = name[name.rfind("/") + 1:]
-                exception = False
+                try:
+                    f = open(path, 'wb')
+                except:
+                    exception = True
+                    client_socket.sendall("doesn't exist")
+                if not exception:
+                    client_socket.send("exists")
+                    l = cupload_socket.recv(1024)
+                    cupload_socket.send("ok")
+                    a = client_socket.recv(1024)
+                    client_socket.send("ok")
+                    while (l):
+                        if a == "no":
+                            break
+                        f.write(l)
+                        l = cupload_socket.recv(1024)
+                        cupload_socket.send("ok")
+                        a = client_socket.recv(1024)
+                        client_socket.send("ok")
+                    f.close()
+                    if a == "no":
+                        os.remove(path)
+                    else:
+                        log = QtGui.QListWidgetItem(lw.log_list)
+                        log.setText(username + " has uploaded a new file named: " + name)
+                upload_socket.close()
+                uploading = False
+
+            elif data == "download":
+                client_socket.sendall("ok")
+                path = pickle.loads(client_socket.recv(8192))
+                username = path
+                username = username[username.find("/") + 1:]
+                username = username[username.find("/") + 1:]
+                username = username[:username.find("/")]
+                name = path
+                name = name[name.rfind("/") + 1:]
                 download_empty = False
                 try:
                     size = os.path.getsize(path)
                     if size == 0:
                         download_empty = True
-                        client_socket.sendall(pickle.dumps("download_empty"))
-                        log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText(username + " has downloaded a new file named: " + name)
-                    else:
+                        client_socket.sendall("download_empty")
+                    if not download_empty:
+                        client_socket.sendall("exists")
+                        client_socket.recv(1024)
                         client_socket.sendall(pickle.dumps(size))
-                except:
-                    client_socket.sendall(pickle.dumps("doesn't exist"))
-                    exception = True
-                client_socket.recv(1024)
-                if not exception and not download_empty:
-                    f = open(path, 'rb')
-                    l = f.read(1024)
-                    while (l):
-                        client_socket.sendall(l)
-                        data = client_socket.recv(1024)
-                        if data == "no":
-                            break
+                        port = client_socket.recv(1024)
+                        download_socket = socket.socket()
+                        download_socket.connect((client_address[0], int(port)))
+                        f = open(path, 'rb')
+                        a = "ok"
                         l = f.read(1024)
-                    f.close()
-                    log = QtGui.QListWidgetItem(lw.log_list)
-                    log.setText(username + " has downloaded a file named: " + name)
+                        while l and a:
+                            download_socket.sendall(l)
+                            a = download_socket.recv(1024)
+                            l = f.read(1024)
+                        f.close()
+                        download_socket.close()
+                        if a:
+                            log = QtGui.QListWidgetItem(lw.log_list)
+                            log.setText(username + " has downloaded a file named: " + name)
+
+                except:
+                    client_socket.sendall("doesn't exist")
+
+
 class User(object):
     def __init__(this, username, email, password, s=None):
         this.username = username
