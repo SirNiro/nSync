@@ -5,6 +5,7 @@ import pickle
 import threading
 import shutil
 import urllib
+import time
 import random as rand
 from functools import partial
 try:
@@ -12,6 +13,11 @@ try:
 except:
     os.system('pip install pyside')
     from PySide import QtGui, QtCore
+try:
+    import privy
+except:
+    os.system('pip install privy')
+    import privy
 if not os.path.exists("if_folder_299060.png"):
     try:
         urllib.urlretrieve("https://drive.google.com/uc?id=1tcSrcRpZZ3fgSrWcIHoNyqhw7DHd7Evy&export=download", "if_folder_299060.png")
@@ -20,6 +26,11 @@ if not os.path.exists("if_folder_299060.png"):
 if not os.path.exists("if_user-alt_285645.png"):
     try:
         urllib.urlretrieve("https://drive.google.com/uc?id=1JQ_xmjDDVJyCYsppf4psTtK8gyu8ggih&export=download", "if_user-alt_285645.png")
+    except:
+        pass
+if not os.path.exists("icon.png"):
+    try:
+        urllib.urlretrieve("https://drive.google.com/uc?export=download&id=1EKvGn74kCnGUIwLc9Wz-JccjcfM1eMj2", "icon.png")
     except:
         pass
 import uuid, smtplib
@@ -34,9 +45,10 @@ class Window(QtGui.QWidget):
 
 
     def initUI(this):
-        this.resize(300, 300)
+        this.setFixedSize(300, 300)
         this.setWindowTitle('Server Panel')
-        this.setWindowIcon(QtGui.QIcon('archlinux-512'))
+        this.setWindowIcon(QtGui.QIcon('icon.png'))
+        this.setWindowFlags(QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowMinimizeButtonHint)
 
         global serveropen
         serveropen = True
@@ -84,9 +96,10 @@ class usersWindow(QtGui.QWidget):
         this.initUI()
 
     def initUI(this):
-        this.resize(500, 500)
+        this.setFixedSize(500, 500)
         this.setWindowTitle('Users List')
-        this.setWindowIcon(QtGui.QIcon('archlinux-512'))
+        this.setWindowIcon(QtGui.QIcon('icon.png'))
+        this.setWindowFlags(QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowMinimizeButtonHint)
 
         this.back_button = QtGui.QPushButton(this)
         this.back_button.setGeometry(QtCore.QRect(5, 475, 61, 20))
@@ -170,6 +183,7 @@ class usersWindow(QtGui.QWidget):
         if ret == msgbox.Yes:
             name = this.user_list.item(row, 1).text()
             shutil.rmtree("./users/" + name + "/")
+            decrypt('database.txt')
             f = open("database.txt", "r")
             lines = f.readlines()
             f.close()
@@ -187,6 +201,7 @@ class usersWindow(QtGui.QWidget):
                 else:
                     f.write(line)
             f.close()
+            encrypt('database.txt')
             for x in users:
                 if x.username == name:
                     users.remove(x)
@@ -222,9 +237,10 @@ class upload_form(QtGui.QWidget):
         this.setupUi()
 
     def setupUi(this):
-        this.resize(300, 400)
+        this.setFixedSize(300, 400)
         this.setWindowTitle(this.username)
-
+        this.setWindowIcon(QtGui.QIcon('icon.png'))
+        this.setWindowFlags(QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowMinimizeButtonHint)
         this.refresh_button = QtGui.QPushButton(this)
         this.refresh_button.setGeometry(110, 355, 80, 40)
         this.refresh_button.clicked.connect(this.refreshPressed)
@@ -373,8 +389,10 @@ class logs_form(QtGui.QWidget):
         this.setupUi()
 
     def setupUi(this):
-        this.resize(350, 400)
+        this.setFixedSize(350, 400)
         this.setWindowTitle("Logs")
+        this.setWindowIcon(QtGui.QIcon('icon.png'))
+        this.setWindowFlags(QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowMinimizeButtonHint)
         this.back_button = QtGui.QPushButton(this)
         this.back_button.setGeometry(QtCore.QRect(10, 360, 61, 30))
         this.back_button.clicked.connect(this.backPressed)
@@ -405,12 +423,16 @@ def clientthread(client_socket,client_address):
                 break
         except:
             log = QtGui.QListWidgetItem(lw.log_list)
-            log.setText(str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected.")
+            ts = time.localtime()
+            log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+            log.setText(log_time + ": " + ( str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected."))
             client_socket.close()
             break
         if not data:
             log = QtGui.QListWidgetItem(lw.log_list)
-            log.setText(str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected.")
+            ts = time.localtime()
+            log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+            log.setText(log_time + ": " + ( str(client_address[0]) + ":" + str(client_address[1]) + " has disconnected."))
             client_socket.close()
             break
         try:
@@ -452,7 +474,9 @@ def clientthread(client_socket,client_address):
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
                         log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText(username + " has created a folder named: " + name)
+                        ts = time.localtime()
+                        log_time =(time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                        log.setText(log_time + ": " + username + " has created a folder named: " + name)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("already exists"))
                     except:
@@ -478,7 +502,10 @@ def clientthread(client_socket,client_address):
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
                         log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText(username + " has deleted a folder named: " + name)
+                        ts = time.localtime()
+                        log_time =(time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                        log.setText(log_time + ": " + username + " has deleted a folder named: " + name)
+
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("doesn't exist"))
                     except:
@@ -502,7 +529,9 @@ def clientthread(client_socket,client_address):
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
                         log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText(username + " has deleted a file named: " + name)
+                        ts = time.localtime()
+                        log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                        log.setText(log_time + ": " + username + " has deleted a file named: " + name)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("doesn't exist"))
                     except:
@@ -540,18 +569,34 @@ def clientthread(client_socket,client_address):
                         client_socket.sendall(pickle.dumps(send))
                         log = QtGui.QListWidgetItem(lw.log_list)
                         if folder:
-                            log.setText(username + " has renamed a folder named: " + name + " to: " + name1)
+                            ts = time.localtime()
+                            log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                            log.setText(log_time + ": " + username + " has renamed a folder named: " + name + " to: " + name1)
                         else:
-                            log.setText(username + " has renamed a file named: " + name + " to: " + name1)
+                            ts = time.localtime()
+                            log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                            log.setText(log_time + ": " + username + " has renamed a file named: " + name + " to: " + name1)
                     except WindowsError:
                         client_socket.sendall(pickle.dumps("already exists"))
                     except:
                         pass
+                elif data[0] == "move":
+                    if os.path.exists(data[1]) and os.path.exists(data[2]):
+                        try:
+                            shutil.move(data[1], data[2])
+                            client_socket.sendall("ok")
+                            log = QtGui.QListWidgetItem(lw.log_list)
+                            ts = time.localtime()
+                            log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                            log.setText(log_time + ": " + data[3] + " has moved a file/folder from: " + data[1] + " to: " + data[2])
+                        except:
+                            client_socket.sendall("already exists")
+                    else:
+                        client_socket.sendall("doesn't exist")
+
                 elif data[0] == "login":
                     if check_credentials(data):
                         client_socket.sendall("login_successful")
-                        username = client_socket.recv(4096)
-                        client_socket.sendall("ok")
                     else:
                         client_socket.sendall("login_unsuccessful")
                 elif data[0] == "forgot_password1":
@@ -597,6 +642,7 @@ def clientthread(client_socket,client_address):
                         for x in users:
                             if x.username == data[1]:
                                 x.password = data[2]
+                                decrypt("database.txt")
                                 f = open("database.txt", "r")
                                 lines = f.readlines()
                                 f.close()
@@ -615,6 +661,7 @@ def clientthread(client_socket,client_address):
                                 for line in lines:
                                     f.write(line)
                                 f.close()
+                                encrypt('database.txt')
                                 uuid_dict[x.username].remove(data[3])
                                 client_socket.sendall("changed")
                                 break
@@ -625,8 +672,11 @@ def clientthread(client_socket,client_address):
                     if validity[0] == "":
                         client_socket.sendall("s")
                         log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText("A new user named: " + data[1] + " has been registered")
+                        ts = time.localtime()
+                        log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                        log.setText(log_time + ": " + "A new user named: " + data[1] + " has been registered")
                         if os.path.exists("database.txt"):
+                            decrypt("database.txt")
                             f = open('database.txt', 'r')
                             text = f.read()
                             f.close()
@@ -636,10 +686,12 @@ def clientthread(client_socket,client_address):
                             else:
                                 f.write("\n"+ data[1] + " " + data[2] + " " + data[3])
                             f.close()
+                            encrypt("database.txt")
                         else:
                             f = open('database.txt', 'w')
                             f.write(data[1] + " " + data[2] + " " + data[3])
                             f.close()
+                            encrypt("database.txt")
                         if not os.path.isdir('users'):
                             os.mkdir('users')
                         os.makedirs("./users/" + validity[1])
@@ -664,7 +716,9 @@ def clientthread(client_socket,client_address):
                             send.append(File(x))
                         client_socket.sendall(pickle.dumps(send))
                         log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText(username + " has uploaded a new file named: " + name)
+                        ts = time.localtime()
+                        log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                        log.setText(log_time + ": " + username + " has uploaded a new file named: " + name)
                     except:
                         client_socket.sendall(pickle.dumps("doesn't exist"))
         else:
@@ -713,7 +767,9 @@ def clientthread(client_socket,client_address):
                         os.remove(path)
                     else:
                         log = QtGui.QListWidgetItem(lw.log_list)
-                        log.setText(username + " has uploaded a new file named: " + name)
+                        ts = time.localtime()
+                        log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                        log.setText(log_time + ": " + username + " has uploaded a new file named: " + name)
                 upload_socket.close()
                 uploading = False
 
@@ -750,11 +806,28 @@ def clientthread(client_socket,client_address):
                         download_socket.close()
                         if a:
                             log = QtGui.QListWidgetItem(lw.log_list)
-                            log.setText(username + " has downloaded a file named: " + name)
+                            ts = time.localtime()
+                            log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+                            log.setText(log_time + ": " + username + " has downloaded a file named: " + name)
 
                 except:
                     client_socket.sendall("doesn't exist")
-
+def encrypt(filename):
+    f = open(filename, 'r')
+    data = f.read()
+    f.close()
+    encrypteddata = privy.hide(data, "!=q9+MW]E2mErKNX")
+    f = open(filename, 'w')
+    f.write(encrypteddata)
+    f.close()
+def decrypt(filename):
+    f = open(filename, 'r')
+    data = f.read()
+    f.close()
+    decrypteddata = privy.peek(data, "!=q9+MW]E2mErKNX")
+    f = open(filename, 'w')
+    f.write(decrypteddata)
+    f.close()
 
 class User(object):
     def __init__(this, username, email, password, s=None):
@@ -802,6 +875,7 @@ def exit(close_button):
     global uploading
     global t1
     global server_socket
+    global udp_socket
     if serveropen:
         if uploading:
             f.close()
@@ -811,8 +885,12 @@ def exit(close_button):
             x[0].close()
         del clients[:]
         server_socket.close()
+        udp_socket.close()
         temp_socket = socket.socket()
         temp_socket.connect(("127.0.0.1", 8820))
+        temp_socket.close()
+        temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        temp_socket.sendto("close please", ("127.0.0.1", 8810))
         temp_socket.close()
         close_button.setText("Open Server")
     else:
@@ -824,6 +902,12 @@ def exit(close_button):
         t1 = threading.Thread(target=acceptClients)
         t1.daemon = True
         t1.start()
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.bind(('0.0.0.0', 8810))
+        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        udp_thread = threading.Thread(target=sendip)
+        udp_thread.daemon = True
+        udp_thread.start()
         close_button.setText("Close Server")
     serveropen = not serveropen
 def acceptClients():
@@ -832,24 +916,41 @@ def acceptClients():
     global serveropen
     global server_socket
     while True:
-        (client_socket, client_address) = server_socket.accept()
+        try:
+            (client_socket, client_address) = server_socket.accept()
+        except:
+            pass
         if not serveropen:
             break
         clients.append((client_socket, client_address))
         log = QtGui.QListWidgetItem(lw.log_list)
-        log.setText(str(client_address[0]) + ":" + str(client_address[1]) + " has connected.")
+        ts = time.localtime()
+        log_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+        log.setText(log_time + ": " + str(client_address[0]) + ":" + str(client_address[1]) + " has connected.")
         t = threading.Thread(target=clientthread, args=(client_socket, client_address,))
         t.daemon = True
         t.start()
+def sendip():
+    global serveropen
+    while True:
+        data, addr = udp_socket.recvfrom(1024)
+        if not serveropen:
+            break
+        try:
+            udp_socket.sendto('hello', (addr[0], addr[1]))
+        except:
+            break
 users = []
 if os.path.exists("database.txt"):
     exists = True
+    decrypt("database.txt")
     with open('database.txt', 'r') as file:
         data = file.readlines()
     for x in data:
         if x != "\n":
             username, email, password = x.split()
             users.append(User(username, email, password))
+    encrypt("database.txt")
 server_socket = socket.socket()
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server_socket.bind(('0.0.0.0', 8820))
@@ -860,6 +961,12 @@ global t1
 t1 = threading.Thread(target=acceptClients)
 t1.daemon = True
 t1.start()
+udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+udp_socket.bind(('0.0.0.0', 8810))
+udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+udp_thread = threading.Thread(target=sendip)
+udp_thread.daemon = True
+udp_thread.start()
 a = QtGui.QApplication(sys.argv)
 w = Window()
 us = usersWindow()
